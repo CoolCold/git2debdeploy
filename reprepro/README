@@ -1,0 +1,60 @@
+This file should contain description for reprepro's part
+
+1) REPREPRO setup
+As general reprepro guide i use (and i've written it) article http://mytechspam.livejournal.com/15066.html , you should do that things first.
+
+example of distributions file for our hotfix repo:
+root@repo:~# cat /srv/reprepro-hotfix/conf/distributions
+Origin: squeeze-lamoda-hotfix
+Label: Debian-All
+Suite: squeeze-lamoda-hotfix
+Codename: squeeze-lamoda-hotfix
+Version: None
+#NotAutomatic: yes
+ButAutomaticUpgrades: yes
+Architectures: i386 amd64 source
+Components: main non-free contrib
+Description: lamoda hotfix Debian Squeeze repository
+SignWith: yes
+UDebComponents: main
+AlsoAcceptFor: unstable
+
+I use /incoming/hotfix directory owned by uploader-dev:root , chmod 755 (750 is ok too). This directory should be set in .dput.cf from jenkins section of configuration docs.
+Now, you have setup reprepro, incoming dir, dput uploads file and..and nothing happens. We should give birth of import magic.
+
+2) IMPORT
+To make packages be imported inside our repo, I've written another script and put it into crontab, like:
+#crontab -l -u uploader-dev
+*/2 * * * * /lamoda/scripts/import-packages.sh -D squeeze-lamoda-hotfix
+where "squeeze-lamoda-hotfix" should match "Origin: squeeze-lamoda-hotfix" from reprepro distributions
+to make uploads be a bit more interactive, I use incron, like:
+#root@repo:~# incrontab -u uploader-dev -l
+/incoming/hotfix IN_CREATE,IN_NO_LOOP /lamoda/scripts/import-packages.sh -D squeeze-lamoda-hotfix -S 15
+
+This command will be fired on changes inside /incoming/hotfix , sleep 15 seconds to give time scp copy big files, and then begin to do import to reprepro.
+The import script behaves in this way:
+it starts, wait for some time if needed, then read _CONFIG_ file, sets lock,
+processes incoming dir for *.changes file, parses that files, deletes
+any packages found in that files from reprepro, just in case,
+then adds .changes with reprepro's "include" command.
+Usually this works well, but bad things may happen if you have bad habit
+to generate packages with the same version, but different content - then
+reprepro will curse you and refuse to import new packages. You may need
+to delete them by hand/manual reprepro commands.
+
+config file example:
+#root@repo:~# cat /lamoda/scripts/configs/config.squeeze-lamoda-hotfix.cfg
+CFG["incomingpath"]="/incoming/hotfix"
+CFG["repreproroot"]="/srv/reprepro-hotfix"
+
+Work is logged into syslog, so one may observe something like:
+Sep 24 16:34:01 repo /USR/SBIN/CRON[21143]: (uploader-dev) CMD (/lamoda/scripts/import-packages.sh -D squeeze-lamoda-hotfix)
+Sep 24 16:34:01 repo pkg-uploader: including config file /lamoda/scripts/configs/config.squeeze-lamoda-hotfix.cfg
+Sep 24 16:34:01 repo pkg-uploader: processing /incoming/hotfix directory...
+Sep 24 16:34:01 repo pkg-uploader: setting lockfile /tmp/uploader.squeeze-lamoda-hotfix.lock
+Sep 24 16:34:01 repo pkg-uploader: removing package lamoda-prudsys-receiver
+Sep 24 16:34:01 repo pkg-uploader: adding /incoming/hotfix/lamoda-frontend2.0_1.9.2.4-77-0b094f008b_amd64.changes into squeeze-lamoda-hotfix
+Sep 24 16:34:02 repo pkg-uploader: removing lockfile /tmp/uploader.squeeze-lamoda-hotfix.lock
+
+
+After this, packages are in repo. Go to server, do apt-get update && apt-get install lamoda-frontend2.0=1.9.2.4-77-0b094f008b and that's all.

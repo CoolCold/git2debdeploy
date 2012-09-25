@@ -1,1 +1,19 @@
-Set of scripts/configs to prepare packages [for deployment] from source code. Created with git/github repos in mind
+1) INFO
+2) TROUBLESHOOTING
+
+
+1) INFO
+Set of scripts/configs to prepare debian packages [for deployment] from source code.
+Created with git/github repos in mind. Additional READMEs in subdirs.
+
+Subdirs:
+jenkins - contains readme, scripts and such related to configuring jenkins
+reprepro - contains readme, scripts and such related to configuring reprepro
+
+
+All scripts & bugs, if another is not mentioned is written by Roman Ovchinnikov <coolthecold@gmail.com>
+
+
+2) TROUBLESHOOTING
+IF IN TROUBLE use "bash -x path/to/script/name" - this will reveal a lot of details.
+

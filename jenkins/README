@@ -1,0 +1,81 @@
+Generic example to build and upload soft with jenkins.
+
+1. BUILDING
+
+Your shell code section in jenkins task config should look like:
+----------------
+#!/bin/bash
+GITSERVER=github-frontend.2.0
+/lamoda/scripts/deploy/create-lamoda-pkg.revs.sh -P frontend.2.0 -B $BRANCH_SPECIFIER -R $REVISION_SPECIFIER -S $GITSERVER
+if [ $? -ne 0 ];then
+   echo "build failed, stopping"
+   exit 1
+fi
+/lamoda/scripts/deploy/upload-pkg-to-repo.sh frontend.2.0 $DEBREPO_SPECIFIER
+-------------
+
+here, "frontend.2.0" is your project name on github.
+params BRANCH_SPECIFIER REVISION_SPEC GITSERVER are specified in jenkins for "parametarized build" and are string,string,choice parameters accordingly. I use such defauls:
+
+BRANCH_SPECIFIER - string parameter
+default: master
+description: specify branch to build
+
+REVISION_SPECIFIER - string parameter
+default: NONE
+description: specify revision
+please note - default value NONE has special meaning, it value is set to anything other, script will try to do git checkout <$REVISION_SPECIFIER>, if it is NONE - just omits checkouting specific revision
+
+DEBREPO_SPECIFIER - choice
+variants:
+repo-dev
+repo-release
+repo-hotfix
+.....
+description: choose debian repo to put package to
+
+So, when you want to start new task in jenkins, you should specify that params. It's not bad idea to put your reasonable defaults (like repo-dev as DEBREPO_SPECIFIER, just not to put something by mistake into release repo).
+
+After you commanded "BUILD!!!!!" create-lamoda-pkg.revs.sh script should start. This script does clone,checkout with your values and tries to start debian package building from the source. Not trying to be too smart, it just starts "buildscripts/debbuild.sh" from cloned rootdir. It is assumed, that script knows how to do debbuild ;)
+For example, buildscripts/debbuild.sh may look like:
+----
+#!/bin/bash
+set -e
+
+echo "build of debian package started"
+#getting version
+GITVERSION=$(git describe --long --abbrev=10)
+GITVERSION=$(echo "${GITVERSION}"|sed 's%\(.*-[[:digit:]]\+-\)\(g\)\(.\{10\}$\)%\1\3%') #removing 'g' from git tag
+
+#just in case there were previous build, restoring debian/changelog
+git checkout debian/changelog
+EMAIL="coolthecold@gmail.com" dch -v ${GITVERSION} "Update to revision ${GITVERSION}"
+dpkg-buildpackage -us -uc -sa -si -rfakeroot
+-----
+
+if buildscripts/debbuild.sh succeded (exit code 0), grepping build log, finding *.changes file, feedding uploader script with found _one_ via writing file's name into special STATUSFILE 
+
+
+2. UPLOADING
+
+upload is done via dput , so requires ~/.dput.cf .
+for example, it may contain such section:
+
+[repo-hotfix]
+fqdn            = repo-hotfix.local
+method          = scp
+# replace <launchpad-id> with your Launchpad ID
+incoming        = /incoming/hotfix
+login           = uploader-dev
+
+~/.ssh/config may contain:
+Host=repo-hotfix.local
+    User=uploader-dev
+    IdentitiesOnly=yes
+    IdentityFile=~/.ssh/uploader_dev.key
+    Hostname=repo.local
+thus allowing you to specify different ssh keys for different repos, for example. You should have pubkey auth in this case of course. As dput doesn't execute any commands on remote side, it is possible to use ftp/othershit for this purposes.
+
+If uploaded succeeded, another magic comes in place - read about this on reprepro example
+
+
