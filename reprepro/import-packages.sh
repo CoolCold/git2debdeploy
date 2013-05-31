@@ -45,7 +45,15 @@ function removepkg() {
     #accepts path to .changes file, parses it and removes according packages
     local i pkglist CHANGESFILE
     CHANGESFILE="$1"
-    pkglist=$(sed '/Changes/,$d' < "${CHANGESFILE}"|sed '1,/Description:/d'|awk '{print $1}')
+    pkglist=$(awk '
+        /^Source:/{print $2}
+        /^Description:/{
+            while (1) {
+                if (getline <= 0) { break }
+                if (substr($0,1,1) != " ") { break }
+                print $1
+            }
+    } ' < "${CHANGESFILE}" | sort | uniq)
     for i in $pkglist
     do
         mylog "removing package $i"
