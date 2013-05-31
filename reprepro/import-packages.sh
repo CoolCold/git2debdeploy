@@ -53,7 +53,7 @@ function removepkg() {
                 if (substr($0,1,1) != " ") { break }
                 print $1
             }
-    } ' < "${CHANGESFILE}" | sort | uniq)
+        }' "${CHANGESFILE}" | sort | uniq)
     for i in $pkglist
     do
         mylog "removing package $i"
